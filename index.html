@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Agency Outreach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f7f5;--card:#fff;--ink:#14201b;--mute:#66736d;--line:#e3e7e4;--accent:#0b996e;--accent-soft:#e3f4ed;--warn:#c2410c;--warn-soft:#fdeee4;--blue:#2563eb;--blue-soft:#e8efff;--grey-soft:#eef0ef}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1412;--card:#171e1b;--ink:#e8eeeb;--mute:#93a29b;--line:#26302c;--accent:#34c38f;--accent-soft:#16332a;--warn:#fb923c;--warn-soft:#3a2416;--blue:#7aa2ff;--blue-soft:#1b2540;--grey-soft:#212a26}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+h1{font-size:22px;margin:0;font-weight:700}
+.sub{color:var(--mute);font-size:13px}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;background:var(--grey-soft);color:var(--mute)}
+.pill.on{background:var(--accent-soft);color:var(--accent)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.blue{background:var(--blue-soft);color:var(--blue)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi .l{color:var(--mute);font-size:12px;font-weight:500}
+.kpi .v{font-size:26px;font-weight:700;margin-top:2px}
+.kpi .d{color:var(--mute);font-size:12px;margin-top:2px}
+.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;min-width:0}
+.card h2{font-size:14px;margin:0 0 10px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:7px 6px;border-top:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500;font-size:12px;border-top:0}
+.scroll{overflow-x:auto}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.funnel{display:flex;flex-direction:column;gap:7px}
+.frow{display:grid;grid-template-columns:110px 1fr 34px;gap:8px;align-items:center;font-size:13px}
+.bar{height:12px;background:var(--grey-soft);border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.feed{max-height:360px;overflow:auto}
+.feed div{padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.feed div:first-child{border-top:0}
+.feed time{color:var(--mute);font-size:12px;margin-right:6px}
+.slots{display:flex;flex-wrap:wrap;gap:6px}
+.slot{font-size:12px;padding:4px 8px;border-radius:8px;border:1px solid var(--line)}
+.slot.used{background:var(--accent-soft);border-color:transparent}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.filters button{font:inherit;font-size:12px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.filters button.act{background:var(--ink);color:var(--card);border-color:var(--ink)}
+input[type=search]{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);min-width:180px}
+.empty{color:var(--mute);font-size:13px;padding:6px 0}
+.gate{max-width:420px;margin:80px auto;text-align:center}
+.small{font-size:12px;color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="gate"><h1>Agency Outreach</h1><p class="sub">Loading…</p></div></div>
+<script>
+const API = 'https://agency-outreach.winningstatics.workers.dev/dash.json';
+let key = new URLSearchParams(location.hash.slice(1)).get('k');
+try { if (key) localStorage.setItem('ao_k', key); else key = localStorage.getItem('ao_k'); } catch (e) {}
+if (location.hash) history.replaceState(null, '', location.pathname);
+let data = null, filter = 'all', q = '';
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const istFmt = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+const slotFmt = (k) => { if (!k) return ''; const [d, t] = k.split(' '); const [h, m] = t.split(':').map(Number); return new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) + ', ' + (((h + 11) % 12) + 1) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' am' : ' pm'); };
+const STATUS = { queued: ['Not contacted', ''], contacted: ['Contacted', 'blue'], engaged: ['In conversation', 'blue'], booked: ['Call booked', 'on'], escalated: ['Needs you', 'warn'], unresponsive: ['No response', ''], declined: ['Declined', ''], opted_out: ['Opted out', ''], bounced: ['Bounced', 'warn'], excluded: ['No email', ''] };
+const pill = (s) => { const [t, c] = STATUS[s] || [s, '']; return `<span class="pill ${c}">${esc(t)}</span>`; };
+const short = (a) => String(a || '').replace(/\s*\(.*\)\s*/, ' ').replace(/\b(pvt\.?|private|ltd\.?|limited|llp)\b/gi, '').trim();
+
+async function load() {
+  if (!key) { document.getElementById('app').innerHTML = '<div class="gate"><h1>Agency Outreach</h1><p class="sub">Open this page with your private link (it ends in #k=…).</p></div>'; return; }
+  try {
+    const r = await fetch(API + '?key=' + encodeURIComponent(key), { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status === 403 ? 'That link key is not valid.' : 'Agent returned ' + r.status);
+    data = await r.json(); render();
+  } catch (e) { document.getElementById('app').innerHTML = `<div class="gate"><h1>Agency Outreach</h1><p class="sub">${esc(e.message)}</p></div>`; }
+}
+
+function render() {
+  const L = data.leads, by = (s) => L.filter((l) => l.status === s);
+  const sendable = L.filter((l) => l.status !== 'excluded');
+  const contacted = L.filter((l) => l.opened_at);
+  const replied = L.filter((l) => l.replies_in > 0);
+  const booked = by('booked');
+  const nowKey = (() => { const x = new Date(Date.now() + 330 * 60000).toISOString(); return x.slice(0, 10) + ' ' + x.slice(11, 16); })();
+  const upcoming = booked.filter((l) => l.call_at && l.call_at >= nowKey).sort((a, b) => a.call_at.localeCompare(b.call_at));
+  const pastCalls = booked.filter((l) => l.call_at && l.call_at < nowKey);
+  const needs = by('escalated');
+  const out = (k) => data.msgs.filter((m) => m.dir === 'out' && m.kind === k).reduce((a, m) => a + m.n, 0);
+  const sentToday = data.slots.filter((s) => s.used && s.kind !== 'idle').length;
+  const rate = contacted.length ? Math.round((replied.length / contacted.length) * 100) : 0;
+  const next = upcoming[0];
+
+  const funnel = [['Not contacted', by('queued').length], ['Contacted', contacted.length], ['Replied', replied.length], ['Call booked', booked.length]];
+  const fmax = Math.max(1, sendable.length);
+  const side = [['No response', by('unresponsive').length], ['Declined', by('declined').length], ['Bounced', by('bounced').length], ['Opted out', by('opted_out').length]];
+
+  const rows = L.filter((l) => (filter === 'all' || l.status === filter) && (!q || (l.agency + ' ' + (l.contact_name || '') + ' ' + (l.city || '')).toLowerCase().includes(q)));
+  const counts = {}; L.forEach((l) => (counts[l.status] = (counts[l.status] || 0) + 1));
+  const chips = ['all', 'booked', 'escalated', 'engaged', 'contacted', 'queued', 'unresponsive', 'declined', 'bounced', 'excluded'].filter((s) => s === 'all' || counts[s]);
+
+  document.getElementById('app').innerHTML = `
+  <header>
+    <div><h1>Agency Outreach</h1><div class="sub">India agencies for Shopify + TikTok ads · Brevo / PushOwl</div></div>
+    <div class="sub">${data.config.sending_enabled === '1' ? '<span class="pill on">Sending on</span>' : '<span class="pill warn">Sending paused</span>'} · ${esc(data.config.daily_cap)}/weekday · calls ${esc(data.config.call_hours)} IST · updated ${istFmt(data.now)}</div>
+  </header>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Contacted</div><div class="v">${contacted.length}<span class="sub"> / ${sendable.length}</span></div><div class="d">${sentToday} sent today</div></div>
+    <div class="kpi"><div class="l">Replied</div><div class="v">${replied.length}</div><div class="d">${rate}% reply rate</div></div>
+    <div class="kpi"><div class="l">Calls booked</div><div class="v">${booked.length}</div><div class="d">${upcoming.length} upcoming</div></div>
+    <div class="kpi"><div class="l">Next call</div><div class="v" style="font-size:17px;margin-top:6px">${next ? esc(short(next.agency)) : 'None yet'}</div><div class="d">${next ? slotFmt(next.call_at) + ' IST' : ''}</div></div>
+    <div class="kpi"><div class="l">Needs you</div><div class="v" style="color:${needs.length ? 'var(--warn)' : 'inherit'}">${needs.length}</div><div class="d">${needs.length ? 'see below' : 'nothing waiting'}</div></div>
+  </div>
+  <div class="grid">
+    <div>
+      <div class="card"><h2>Upcoming calls</h2>${upcoming.length ? `<div class="scroll"><table><tr><th>When (IST)</th><th>Agency</th><th>Contact</th><th>Meet</th><th>Thread</th></tr>${upcoming.map((l) => `<tr><td>${slotFmt(l.call_at)}</td><td>${esc(short(l.agency))}</td><td>${esc(l.contact_name || l.email)}</td><td>${l.meet_link ? `<a href="${esc(l.meet_link)}" target="_blank" rel="noopener">Join</a>` : '<span class="small">invite pending</span>'}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td></tr>`).join('')}</table></div>` : '<div class="empty">No calls booked yet.</div>'}
+      ${pastCalls.length ? `<div class="small" style="margin-top:8px">Past calls: ${pastCalls.map((l) => esc(short(l.agency)) + ' (' + slotFmt(l.call_at) + ')').join(', ')}</div>` : ''}</div>
+      <div class="card"><h2>Needs you</h2>${needs.length ? `<table>${needs.map((l) => `<tr><td><b>${esc(short(l.agency))}</b><div class="small">${esc(l.escalation || '')}</div></td><td style="text-align:right">${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Open thread</a>` : ''}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing waiting on you.</div>'}</div>
+      <div class="card"><h2>In conversation</h2>${by('engaged').length ? `<table>${by('engaged').map((l) => `<tr><td><b>${esc(short(l.agency))}</b><div class="small">${esc(l.last_summary || '')}</div></td><td class="small" style="white-space:nowrap">${istFmt(l.last_in_at)}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td></tr>`).join('')}</table>` : '<div class="empty">No open conversations.</div>'}</div>
+    </div>
+    <div>
+      <div class="card"><h2>Pipeline</h2><div class="funnel">${funnel.map(([t, n]) => `<div class="frow"><span>${t}</span><div class="bar"><i style="width:${(n / fmax) * 100}%"></i></div><b>${n}</b></div>`).join('')}</div>
+        <div class="small" style="margin-top:10px">${side.map(([t, n]) => `${t}: ${n}`).join(' · ')}</div>
+        <div class="small" style="margin-top:4px">Sent so far: ${out('opener')} openers, ${out('followup') + out('breakup')} follow-ups, ${out('nudge')} nudges, ${out('reply')} replies</div></div>
+      <div class="card"><h2>Today's send plan</h2>${data.slots.length ? `<div class="slots">${data.slots.map((s) => `<span class="slot ${s.used ? 'used' : ''}" title="${esc(s.agency || '')}">${istFmt(s.at).split(', ').pop()}${s.used && s.agency ? ' · ' + esc(short(s.agency)) : ''}</span>`).join('')}</div>` : '<div class="empty">No sends today (weekend or holiday).</div>'}</div>
+      <div class="card"><h2>Activity</h2><div class="feed">${data.events.map((e) => `<div><time>${istFmt(e.at.replace(' ', 'T') + 'Z')}</time>${e.agency ? '<b>' + esc(short(e.agency)) + '</b> · ' : ''}${esc(e.msg)}</div>`).join('')}</div></div>
+    </div>
+  </div>
+  <div class="card"><h2><span>All agencies</span><input type="search" id="q" placeholder="Search agency, contact, city" value="${esc(q)}"></h2>
+    <div class="filters">${chips.map((s) => `<button data-f="${s}" class="${filter === s ? 'act' : ''}">${s === 'all' ? 'All' : (STATUS[s] || [s])[0]} (${s === 'all' ? L.length : counts[s]})</button>`).join('')}</div>
+    <div class="scroll"><table><tr><th>#</th><th>Agency</th><th>Contact</th><th>City</th><th>Status</th><th>First email</th><th>Last reply</th><th>Call</th><th></th></tr>
+    ${rows.map((l) => `<tr><td>${l.rank}</td><td><a href="${esc(l.website)}" target="_blank" rel="noopener">${esc(short(l.agency))}</a></td><td>${esc(l.contact_name || '')}<div class="small">${esc(l.email || '')}</div></td><td class="small">${esc((l.city || '').split(/[,(;]/)[0])}</td><td>${pill(l.status)}</td><td class="small">${istFmt(l.opened_at)}</td><td class="small">${istFmt(l.last_in_at)}</td><td class="small">${l.call_at ? slotFmt(l.call_at) : ''}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td></tr>`).join('')}</table></div>
+  </div>
+  <div class="small">Refreshes every minute. Live from the outreach agent.</div>`;
+  document.querySelectorAll('.filters button').forEach((b) => (b.onclick = () => { filter = b.dataset.f; render(); }));
+  const qi = document.getElementById('q'); qi.oninput = () => { q = qi.value.toLowerCase(); const pos = qi.selectionStart; render(); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(pos, pos); };
+}
+load(); setInterval(load, 60000);
+</script>
+</body>
+</html>
