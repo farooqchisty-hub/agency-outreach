@@ -53,6 +53,20 @@ input[type=search]{font:inherit;padding:6px 10px;border:1px solid var(--line);bo
 .empty{color:var(--mute);font-size:13px;padding:6px 0}
 .gate{max-width:420px;margin:80px auto;text-align:center}
 .small{font-size:12px;color:var(--mute)}
+.nbtn{font:inherit;font-size:12px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;white-space:nowrap}
+.nbtn.has{border-color:var(--accent);color:var(--accent)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:10}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:14px;width:100%;max-width:560px;padding:18px;max-height:88vh;overflow:auto}
+.modal h3{margin:0 0 2px;font-size:17px}
+.modal label{display:block;font-size:12px;color:var(--mute);font-weight:500;margin:12px 0 4px}
+.modal select,.modal input,.modal textarea{width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.modal textarea{min-height:150px;resize:vertical}
+.modal .ctx{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--mute);margin-top:8px}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;align-items:center}
+.actions .save{background:var(--accent);color:#fff;border:0;padding:8px 16px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+.actions .cancel{background:none;border:0;color:var(--mute);font:inherit;cursor:pointer}
+.v-Shortlist{background:var(--accent-soft);color:var(--accent)} .v-Maybe{background:var(--blue-soft);color:var(--blue)} .v-Not{background:var(--warn-soft);color:var(--warn)}
+.clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 </style>
 </head>
 <body>
@@ -62,7 +76,10 @@ const API = 'https://agency-outreach.winningstatics.workers.dev/dash.json';
 let key = new URLSearchParams(location.hash.slice(1)).get('k');
 try { if (key) localStorage.setItem('ao_k', key); else key = localStorage.getItem('ao_k'); } catch (e) {}
 if (location.hash) history.replaceState(null, '', location.pathname);
-let data = null, filter = 'all', q = '';
+let data = null, filter = 'all', q = '', editing = null;
+const NOTE_API = 'https://agency-outreach.winningstatics.workers.dev/dash/note';
+const vpill = (v) => v ? `<span class="pill v-${esc(v.split(' ')[0])}">${esc(v)}</span>` : '';
+const nbtn = (l) => `<button class="nbtn ${l.takeaways || l.verdict || l.next_step ? 'has' : ''}" data-note="${l.id}">${l.takeaways || l.verdict || l.next_step ? 'Notes' : '+ Notes'}</button>`;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const istFmt = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
 const slotFmt = (k) => { if (!k) return ''; const [d, t] = k.split(' '); const [h, m] = t.split(':').map(Number); return new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) + ', ' + (((h + 11) % 12) + 1) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' am' : ' pm'); };
@@ -75,7 +92,7 @@ async function load() {
   try {
     const r = await fetch(API + '?key=' + encodeURIComponent(key), { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status === 403 ? 'That link key is not valid.' : 'Agent returned ' + r.status);
-    data = await r.json(); render();
+    data = await r.json(); if (!editing) render();
   } catch (e) { document.getElementById('app').innerHTML = `<div class="gate"><h1>Agency Outreach</h1><p class="sub">${esc(e.message)}</p></div>`; }
 }
 
@@ -89,6 +106,8 @@ function render() {
   const upcoming = booked.filter((l) => l.call_at && l.call_at >= nowKey).sort((a, b) => a.call_at.localeCompare(b.call_at));
   const pastCalls = booked.filter((l) => l.call_at && l.call_at < nowKey);
   const needs = by('escalated');
+  const noted = L.filter((l) => l.verdict || l.takeaways || l.next_step || l.meet_notes_url || (l.call_at && l.call_at < nowKey));
+  const mn = (l) => l.meet_notes_url ? `<div><a href="${esc(l.meet_notes_url)}" target="_blank" rel="noopener">Meeting notes (Gemini)</a></div>` : (l.meet_notes_text ? '<div class="small">Gemini summary in Notes</div>' : (l.call_at && l.call_at < nowKey ? '<div class="small">Gemini notes: not found yet</div>' : ''));
   const out = (k) => data.msgs.filter((m) => m.dir === 'out' && m.kind === k).reduce((a, m) => a + m.n, 0);
   const sentToday = data.slots.filter((s) => s.used && s.kind !== 'idle').length;
   const rate = contacted.length ? Math.round((replied.length / contacted.length) * 100) : 0;
@@ -116,8 +135,9 @@ function render() {
   </div>
   <div class="grid">
     <div>
-      <div class="card"><h2>Upcoming calls</h2>${upcoming.length ? `<div class="scroll"><table><tr><th>When (IST)</th><th>Agency</th><th>Contact</th><th>Meet</th><th>Thread</th></tr>${upcoming.map((l) => `<tr><td>${slotFmt(l.call_at)}</td><td>${esc(short(l.agency))}</td><td>${esc(l.contact_name || l.email)}</td><td>${l.meet_link ? `<a href="${esc(l.meet_link)}" target="_blank" rel="noopener">Join</a>` : '<span class="small">invite pending</span>'}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td></tr>`).join('')}</table></div>` : '<div class="empty">No calls booked yet.</div>'}
+      <div class="card"><h2>Upcoming calls</h2>${upcoming.length ? `<div class="scroll"><table><tr><th>When (IST)</th><th>Agency</th><th>Contact</th><th>Meet</th><th>Thread</th><th></th></tr>${upcoming.map((l) => `<tr><td>${slotFmt(l.call_at)}</td><td>${esc(short(l.agency))}</td><td>${esc(l.contact_name || l.email)}</td><td>${l.meet_link ? `<a href="${esc(l.meet_link)}" target="_blank" rel="noopener">Join</a>` : '<span class="small">invite pending</span>'}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td><td>${nbtn(l)}</td></tr>`).join('')}</table></div>` : '<div class="empty">No calls booked yet.</div>'}
       ${pastCalls.length ? `<div class="small" style="margin-top:8px">Past calls: ${pastCalls.map((l) => esc(short(l.agency)) + ' (' + slotFmt(l.call_at) + ')').join(', ')}</div>` : ''}</div>
+      <div class="card"><h2>Call notes and takeaways</h2>${noted.length ? `<table>${noted.map((l) => `<tr><td style="width:34%"><b>${esc(short(l.agency))}</b><div class="small">${l.call_at ? slotFmt(l.call_at) : ''}</div>${vpill(l.verdict)}${mn(l)}</td><td><div class="clip">${esc(l.takeaways || '')}</div>${l.next_step ? `<div class="small">Next: ${esc(l.next_step)}</div>` : ''}${!l.takeaways && !l.next_step ? '<span class="small">No notes yet</span>' : ''}</td><td style="text-align:right">${nbtn(l)}</td></tr>`).join('')}</table>` : '<div class="empty">Add notes from any agency row. Calls you have had show up here automatically.</div>'}</div>
       <div class="card"><h2>Needs you</h2>${needs.length ? `<table>${needs.map((l) => `<tr><td><b>${esc(short(l.agency))}</b><div class="small">${esc(l.escalation || '')}</div></td><td style="text-align:right">${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Open thread</a>` : ''}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing waiting on you.</div>'}</div>
       <div class="card"><h2>In conversation</h2>${by('engaged').length ? `<table>${by('engaged').map((l) => `<tr><td><b>${esc(short(l.agency))}</b><div class="small">${esc(l.last_summary || '')}</div></td><td class="small" style="white-space:nowrap">${istFmt(l.last_in_at)}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td></tr>`).join('')}</table>` : '<div class="empty">No open conversations.</div>'}</div>
     </div>
@@ -131,13 +151,41 @@ function render() {
   </div>
   <div class="card"><h2><span>All agencies</span><input type="search" id="q" placeholder="Search agency, contact, city" value="${esc(q)}"></h2>
     <div class="filters">${chips.map((s) => `<button data-f="${s}" class="${filter === s ? 'act' : ''}">${s === 'all' ? 'All' : (STATUS[s] || [s])[0]} (${s === 'all' ? L.length : counts[s]})</button>`).join('')}</div>
-    <div class="scroll"><table><tr><th>#</th><th>Agency</th><th>Contact</th><th>City</th><th>Status</th><th>First email</th><th>Last reply</th><th>Call</th><th></th></tr>
-    ${rows.map((l) => `<tr><td>${l.rank}</td><td><a href="${esc(l.website)}" target="_blank" rel="noopener">${esc(short(l.agency))}</a></td><td>${esc(l.contact_name || '')}<div class="small">${esc(l.email || '')}</div></td><td class="small">${esc((l.city || '').split(/[,(;]/)[0])}</td><td>${pill(l.status)}</td><td class="small">${istFmt(l.opened_at)}</td><td class="small">${istFmt(l.last_in_at)}</td><td class="small">${l.call_at ? slotFmt(l.call_at) : ''}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td></tr>`).join('')}</table></div>
+    <div class="scroll"><table><tr><th>#</th><th>Agency</th><th>Contact</th><th>City</th><th>Status</th><th>Verdict</th><th>First email</th><th>Last reply</th><th>Call</th><th></th><th></th></tr>
+    ${rows.map((l) => `<tr><td>${l.rank}</td><td><a href="${esc(l.website)}" target="_blank" rel="noopener">${esc(short(l.agency))}</a></td><td>${esc(l.contact_name || '')}<div class="small">${esc(l.email || '')}</div></td><td class="small">${esc((l.city || '').split(/[,(;]/)[0])}</td><td>${pill(l.status)}</td><td>${vpill(l.verdict)}</td><td class="small">${istFmt(l.opened_at)}</td><td class="small">${istFmt(l.last_in_at)}</td><td class="small">${l.call_at ? slotFmt(l.call_at) : ''}</td><td>${l.thread_url ? `<a href="${esc(l.thread_url)}" target="_blank" rel="noopener">Gmail</a>` : ''}</td><td>${nbtn(l)}</td></tr>`).join('')}</table></div>
   </div>
   <div class="small">Refreshes every minute. Live from the outreach agent.</div>`;
   document.querySelectorAll('.filters button').forEach((b) => (b.onclick = () => { filter = b.dataset.f; render(); }));
+  document.querySelectorAll('[data-note]').forEach((b) => (b.onclick = () => openNote(Number(b.dataset.note))));
   const qi = document.getElementById('q'); qi.oninput = () => { q = qi.value.toLowerCase(); const pos = qi.selectionStart; render(); const n = document.getElementById('q'); n.focus(); n.setSelectionRange(pos, pos); };
 }
+function openNote(id) {
+  const l = data.leads.find((x) => x.id === id); if (!l) return; editing = id;
+  const o = document.createElement('div'); o.className = 'overlay'; o.id = 'ov';
+  o.innerHTML = `<div class="modal" role="dialog" aria-label="Notes">
+    <h3>${esc(short(l.agency))}</h3><div class="small">${esc(l.contact_name || '')} ${l.email ? '· ' + esc(l.email) : ''} ${l.call_at ? '· call ' + slotFmt(l.call_at) + ' IST' : ''}</div>
+    ${l.last_summary ? `<div class="ctx">Agent's last read: ${esc(l.last_summary)}</div>` : ''}
+    ${l.meet_notes_url || l.meet_notes_text ? `<div class="ctx"><b>Meeting notes (Gemini)</b>${l.meet_notes_url ? ` · <a href="${esc(l.meet_notes_url)}" target="_blank" rel="noopener">open doc</a>` : ''}${l.meet_notes_text ? `<div style="white-space:pre-wrap;max-height:180px;overflow:auto;margin-top:6px">${esc(l.meet_notes_text)}</div>` : ''}</div>` : ''}
+    <label for="nv">Verdict</label><select id="nv">${['', 'Shortlist', 'Maybe', 'Not a fit'].map((v) => `<option ${v === (l.verdict || '') ? 'selected' : ''} value="${v}">${v || 'Not decided'}</option>`).join('')}</select>
+    <label for="nt">Takeaways, comments, feedback</label><textarea id="nt" placeholder="What did you learn on the call? Pricing, team, TikTok and Shopify proof, red flags, gut feel">${esc(l.takeaways || '')}</textarea>
+    <label for="nn">Next step</label><input id="nn" placeholder="e.g. send brief, ask for proposal, intro to finance" value="${esc(l.next_step || '')}">
+    <div class="actions"><span class="small" id="nmsg">${l.notes_updated_at ? 'Last saved ' + istFmt(l.notes_updated_at) : ''}</span><button class="cancel" id="nc">Cancel</button><button class="save" id="ns">Save</button></div></div>`;
+  document.body.appendChild(o);
+  const close = () => { o.remove(); editing = null; render(); };
+  o.onclick = (e) => { if (e.target === o) close(); };
+  document.getElementById('nc').onclick = close;
+  document.getElementById('nt').focus();
+  document.getElementById('ns').onclick = async () => {
+    const body = { id, verdict: document.getElementById('nv').value, takeaways: document.getElementById('nt').value, next_step: document.getElementById('nn').value };
+    const msg = document.getElementById('nmsg'); msg.textContent = 'Saving…';
+    try {
+      const r = await fetch(NOTE_API + '?key=' + encodeURIComponent(key), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error('save failed (' + r.status + ')');
+      const j = await r.json(); Object.assign(l, body, { notes_updated_at: j.at }); close();
+    } catch (e) { msg.textContent = e.message; }
+  };
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.getElementById('ov')) { document.getElementById('ov').remove(); editing = null; render(); } });
 load(); setInterval(load, 60000);
 </script>
 </body>
