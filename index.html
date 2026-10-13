@@ -99,7 +99,7 @@ const nbtn = (l) => `<button class="nbtn ${l.takeaways || l.verdict || l.next_st
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const istFmt = (iso) => iso ? new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
 const slotFmt = (k) => { if (!k) return ''; const [d, t] = k.split(' '); const [h, m] = t.split(':').map(Number); return new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) + ', ' + (((h + 11) % 12) + 1) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' am' : ' pm'); };
-const STATUS = { queued: ['Not contacted', ''], contacted: ['Contacted', 'blue'], engaged: ['In conversation', 'blue'], booked: ['Call booked', 'on'], escalated: ['Needs you', 'warn'], unresponsive: ['No response', ''], declined: ['Declined', ''], opted_out: ['Opted out', ''], bounced: ['Bounced', 'warn'], excluded: ['No email', ''] };
+const STATUS = { proposal: ['Proposal in', 'on'], queued: ['Not contacted', ''], contacted: ['Contacted', 'blue'], engaged: ['In conversation', 'blue'], booked: ['Call booked', 'on'], escalated: ['Needs you', 'warn'], unresponsive: ['No response', ''], declined: ['Declined', ''], opted_out: ['Opted out', ''], bounced: ['Bounced', 'warn'], excluded: ['No email', ''] };
 const pill = (s) => { const [t, c] = STATUS[s] || [s, '']; return `<span class="pill ${c}">${esc(t)}</span>`; };
 const short = (a) => String(a || '').replace(/\s*\(.*\)\s*/, ' ').replace(/\b(pvt\.?|private|ltd\.?|limited|llp)\b/gi, '').trim();
 
@@ -135,7 +135,7 @@ function render() {
 
   const rows = L.filter((l) => (filter === 'all' || l.status === filter) && (!q || (l.agency + ' ' + (l.contact_name || '') + ' ' + (l.city || '') + ' ' + (l.agency_brief || '')).toLowerCase().includes(q))).sort((a, b) => ((a[sortBy] ?? -1) - (b[sortBy] ?? -1)) * sortDir);
   const counts = {}; L.forEach((l) => (counts[l.status] = (counts[l.status] || 0) + 1));
-  const chips = ['all', 'booked', 'escalated', 'engaged', 'contacted', 'queued', 'unresponsive', 'declined', 'bounced', 'excluded'].filter((s) => s === 'all' || counts[s]);
+  const chips = ['all', 'proposal', 'booked', 'escalated', 'engaged', 'contacted', 'queued', 'unresponsive', 'declined', 'bounced', 'excluded'].filter((s) => s === 'all' || counts[s]);
 
   document.getElementById('app').innerHTML = `
   <header>
